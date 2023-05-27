@@ -151,30 +151,30 @@ void loop(){
 
 
 
-    // инкремент текущего времени
+    // инкремент текущего времени -------------------------------------------------- todo проверить ---------------------
     // секунды
     if(currentNumbers[5] != 9){
       currentNumbers[5]++;
     }else{
-      currentNumbers[5]==0;
+      currentNumbers[5]=0;
 
       // десятки секунд
       if(currentNumbers[4] != 5){
         currentNumbers[4]++;
       }else{
-        currentNumbers[4]==0;
+        currentNumbers[4]=0;
 
         // минуты
         if(currentNumbers[3] != 9){
           currentNumbers[3]++;
         }else{
-          currentNumbers[3]==0;
+          currentNumbers[3]=0;
 
           // десятки минут
           if(currentNumbers[2] != 6){
             currentNumbers[2]++;
           }else{
-            currentNumbers[2]==0;
+            currentNumbers[2]=0;
 
             // инкремент часов
             if(currentNumbers[0] == 2 && currentNumbers[1] == 4){
@@ -232,6 +232,8 @@ void loop(){
           break;
         }
 
+   
+
     }else{
 
       // вывод чисел на часы
@@ -260,6 +262,17 @@ void loop(){
       12//"h"
     );
   }
+
+       
+          outClockNumbers(
+            10, // "минус"
+            0,
+            1,
+            2,
+            3,
+            4
+          );
+          delay(100);
   
 
 
