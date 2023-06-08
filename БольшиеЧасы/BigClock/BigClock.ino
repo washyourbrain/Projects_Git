@@ -23,7 +23,7 @@ uint8_t lessonsTime [7][8] = {
 // раз в сколько милисекунд обновлять значение на индикаторах
 uint16_t updateIndicatorTime = 1000;
 // раз в сколько милисекунд получать значение с таймера
-uint16_t updateRTCTime = 15000;
+uint16_t updateRTCTime = 5000;
 // раз в сколько милисекунд   название говорит само за себя
 uint16_t updateLohTime = 45000;
 
@@ -73,16 +73,27 @@ uint16_t updateLohCounter = 0;
 
 
 // текущее значение на индикаторах
-uint8_t currentNumbers[6] = {0,1,2,3,4,5};
+uint8_t currentNumbers[6] = {2,3,5,9,4,5};
 
 // подключенный таймер
 RTC_DS3231 rtc;
 // обновляемая переменная с временем из таймера
-DateTime nowTime;
+//DateTime nowTime;
 
 // === Начальная настройка ===================================================================================================
 
 void setup(){
+
+  Serial.begin(57600);
+
+  // подключаем часы реального времени
+  if (! rtc.begin()) {
+       //проверка подключения часов реального времени (для отладки)
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
+    while (1) delay(10);
+  }
+
 
   /*
   проверка подключения часов реального времени (для отладки)
@@ -96,11 +107,25 @@ void setup(){
   */
 
   // при первой прошивке загружаем в таймер реального времени время компиляции прошивки
-  if (rtc.lostPower()) {
+  if (rtc.lostPower()|| true) {
     Serial.println("RTC lost power, let's set the time!");
     // When time needs to be set on a new device, or after a power loss, the
     // following line sets the RTC to the date & time this sketch was compiled
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    
+    Serial.print(F(__DATE__));
+    Serial.print(" ");
+    Serial.print(F(__TIME__));
+    Serial.print(" ");
+    //Serial.println(nowTime.second());
+
+    
+    //Serial.print(nowTime.hour(), DEC);
+    Serial.print(" ");
+    //Serial.print(nowTime.minute(), DEC);
+    Serial.print(" ");
+    //Serial.println(nowTime.second(), DEC);
+    delay(2000);
     // This line sets the RTC with an explicit date & time, for example to set
     // January 21, 2014 at 3am you would call:
     // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
@@ -115,7 +140,6 @@ void setup(){
   pinMode(PIN_NUMBERS_DATA_HOURS, 1);
 
   
-
   // сброс таймеров
   updateIndicatorCounter = 0;
   updateRTCCounter = 0;
@@ -133,15 +157,15 @@ void loop(){
     updateRTCCounter = millis();
 
     // запрашиваем время из RTC
-    nowTime = rtc.now();
+    DateTime testTime = rtc.now();
 
-    // вывод данных в поля
-    currentNumbers[0] = nowTime.hour() / 10;
-    currentNumbers[1] = nowTime.hour() % 10;
-    currentNumbers[2] = nowTime.minute() / 10;
-    currentNumbers[3] = nowTime.minute() % 10;
-    currentNumbers[4] = nowTime.second() / 10;
-    currentNumbers[5] = nowTime.second() % 10;
+    // вывод данных в поля 
+    currentNumbers[0] = testTime.hour() / 10;
+    currentNumbers[1] = testTime.hour() % 10;
+    currentNumbers[2] = testTime.minute() / 10;
+    currentNumbers[3] = testTime.minute() % 10;
+    currentNumbers[4] = testTime.second() / 10;
+    currentNumbers[5] = testTime.second() % 10;
 
   }
 
@@ -171,13 +195,13 @@ void loop(){
           currentNumbers[3]=0;
 
           // десятки минут
-          if(currentNumbers[2] != 6){
+          if(currentNumbers[2] != 5){
             currentNumbers[2]++;
           }else{
             currentNumbers[2]=0;
 
             // инкремент часов
-            if(currentNumbers[0] == 2 && currentNumbers[1] == 4){
+            if(currentNumbers[0] == 2 && currentNumbers[1] == 3){
               currentNumbers[0] = 0;
               currentNumbers[1] = 0;
             }else if(currentNumbers[1] == 9){
@@ -190,7 +214,6 @@ void loop(){
         }
       }
     }
-
 
     // выводить ли обратный отсчет на уроке
     if(outCutdown){
@@ -247,32 +270,41 @@ void loop(){
       );
     }
 
+    Serial.print(currentNumbers[0]);
+    Serial.print(currentNumbers[1]);
+    Serial.print(":");
+    Serial.print(currentNumbers[2]);
+    Serial.print(currentNumbers[3]);
+    Serial.print(":");
+    Serial.print(currentNumbers[4]);
+    Serial.println(currentNumbers[5]);
+
   }
 
-  // Лохкаунтер 
-  if(millis() - updateLohCounter >= updateLohTime){
-    updateLohCounter = millis();
+  // // Лохкаунтер 
+  // if(millis() - updateLohCounter >= updateLohTime){
+  //   updateLohCounter = millis();
 
-    outClockNumbers(
-      11,//"L"
-      0,
-      12,//"h"
-      11,//"L"
-      0,
-      12//"h"
-    );
-  }
+  //   outClockNumbers(
+  //     11,//"L"
+  //     0,
+  //     12,//"h"
+  //     11,//"L"
+  //     0,
+  //     12//"h"
+  //   );
+  // }
 
        
-          outClockNumbers(
-            10, // "минус"
-            0,
-            1,
-            2,
-            3,
-            4
-          );
-          delay(100);
+          // outClockNumbers(
+          //   10, // "минус"
+          //   0,
+          //   1,
+          //   2,
+          //   3,
+          //   4
+          // );
+          // delay(100);
   
 
 
