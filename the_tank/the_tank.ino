@@ -1,7 +1,8 @@
 // выходы на управление моторами
 #define MOTORL_1 10 
-#define MOTORL_2 11
 #define MOTORR_1 5
+
+#define MOTORL_2 11
 #define MOTORR_2 6
 
 
