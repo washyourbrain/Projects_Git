@@ -1,3 +1,5 @@
+// robot padla
+
 // выходы на управление моторами
 #define MOTORL_1 5 
 #define MOTORL_2 3
