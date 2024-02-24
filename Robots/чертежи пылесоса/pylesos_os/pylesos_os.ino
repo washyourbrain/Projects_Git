@@ -1,64 +1,14 @@
 // выходы на управление моторами
 #define MOTORL_1 3
-#define MOTORR_1 5
+#define MOTORL_2 5
 
-#define MOTORL_2 6
+#define MOTORR_1 6
 #define MOTORR_2 9
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Это  старый файл в нем неправильные пины мотров
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /*============= НАСТРОЙКИ =============*/
-#define MOTOR_MAX 255  // максимальный сигнал на мотор (max 255)
-#define JOY_MAX 40     // рабочий ход джойстика (из приложения)
+//#define MOTOR_MAX 255  // максимальный сигнал на мотор (max 255)
+//#define JOY_MAX 40     // рабочий ход джойстика (из приложения)
 // мертвая зона чтобы не спалить движки
 #define DEAD_ZONE 50
 
@@ -68,7 +18,7 @@
 #define BT_RX 7
 SoftwareSerial BTserial(BT_TX, BT_RX);  // TX, RX
 // принятые данные
-boolean doneParsing, startParsing;
+//boolean doneParsing, startParsing;
 
 
 void setup() {
@@ -94,46 +44,43 @@ void loop() {
 
 
 
-  if (doneParsing) {  // если получены данные
-    doneParsing = false;
+  // if (doneParsing) {  // если получены данные
+  //   doneParsing = false;
 
-    int joystickX = map((dataX), -JOY_MAX, JOY_MAX, -MOTOR_MAX / 2, MOTOR_MAX / 2);  // сигнал по Х (-128 <> 127)
-    int joystickY = map((dataY), -JOY_MAX, JOY_MAX, -MOTOR_MAX, MOTOR_MAX);          // сигнал по Y (-256 <> 255)
+  //   int joystickX = map((dataX), -JOY_MAX, JOY_MAX, -MOTOR_MAX / 2, MOTOR_MAX / 2);  // сигнал по Х (-128 <> 127)
+  //   int joystickY = map((dataY), -JOY_MAX, JOY_MAX, -MOTOR_MAX, MOTOR_MAX);          // сигнал по Y (-256 <> 255)
 
-    int dutyR = joystickY + joystickX;  // считаем сигнал для правого мотора
-    int dutyL = joystickY - joystickX;  // считаем сигнал для левого мотора
+  //   int dutyR = joystickY + joystickX;  // считаем сигнал для правого мотора
+  //   int dutyL = joystickY - joystickX;  // считаем сигнал для левого мотора
 
 
-    if (dutyR >= 0) {
-      motorR_drive(true, (uint8_t)dutyR);
-    } else {
-      motorR_drive(false, (uint8_t)(-dutyR));
-    }
+  //   if (dutyR >= 0) {
+  //     motorR_drive(true, (uint8_t)dutyR);
+  //   } else {
+  //     motorR_drive(false, (uint8_t)(-dutyR));
+  //   }
 
-    if (dutyL >= 0) {
-      motorL_drive(true, (uint8_t)dutyL);
-    } else {
-      motorL_drive(false, (uint8_t)(-dutyL));
-    }
-  }
+  //   if (dutyL >= 0) {
+  //     motorL_drive(true, (uint8_t)dutyL);
+  //   } else {
+  //     motorL_drive(false, (uint8_t)(-dutyL));
+  //   }
+  // }
 }
 
 
 
-//String string_convert;
-
 bool isReadNumber = false;
-bool tempNumber = 0;
+uint8_t tempNumber = 0;
 
-uint8_t direction = 1;  // 0 - 1 - 2   2 вперед, 1 назад
+int lmot;
+int rmot;
+
 void parsing() {
   if (BTserial.available() > 0) {         // если в буфере есть данные
     char incomingChar = BTserial.read();  // читаем из буфера
 
-    Serial.print((uint8_t)incomingChar);
-    Serial.print(" ");
-    Serial.write(incomingChar);
-    Serial.println();
+    Serial.println(incomingChar);
 
 
 
@@ -143,64 +90,70 @@ void parsing() {
 
       // если читалось число заканчиваем его чтение
       if (isReadNumber) {
-        isReadNumber = false;
 
-        uint8_t lmot;
-        uint8_t rmot;
-
-        if(direction == 0){ // стоп 
-          lmot = 0;
-          rmot = 0;
-        }else{
-
-          // вперед
-          if (tempNumber <= 90) {  // влево
-            lmot = map(tempNumber, 0, 90, -255, 255);
-            rmot = 255;
-          } else {  // вправо
-            lmot = 255;
-            rmot = map(tempNumber, 91, 180, 255, -255);
-          }
-
-          // назад 
-          if(direction == 1){
-            lmot = -lmot;
-            rmot = -rmot;
-          }
+        // рулим
+        if (tempNumber <= 90) {  // влево
+          lmot = map(tempNumber, 0, 90, -255, 255);
+          rmot = 255;
+        } else {  // вправо
+          lmot = 255;
+          rmot = map(tempNumber, 91, 180, 255, -255);
         }
+        // вот и порулили 
 
-        
-        // вот и порулили
+        Serial.println(tempNumber);
+        isReadNumber = false;
+        tempNumber = 0;
       }
 
 
       switch (incomingChar) {
         case 'S':  // стоп
-          direction = 0;
+          motors_stop();
+
           break;
         case 'F':  // вперед
-          direction = 2;
+
+          if (lmot < 0) {
+            motorL_drive(false, (uint8_t)(-lmot));
+          } else {
+            motorL_drive(true, (uint8_t)(lmot));
+          }
+          if (rmot < 0) {
+            motorR_drive(false, (uint8_t)(-rmot));
+          } else {
+            motorR_drive(true, (uint8_t)(rmot));
+          }
           break;
         case 'G':  // назад
-          direction = 1;
+          if (lmot < 0) {
+            motorL_drive(true, (uint8_t)(-lmot));
+          } else {
+            motorL_drive(false, (uint8_t)(lmot));
+          }
+          if (rmot < 0) {
+            motorR_drive(true, (uint8_t)(-rmot));
+          } else {
+            motorR_drive(false, (uint8_t)(rmot));
+          }
+
           break;
         case 'L':  // лево 100
+          motorR_drive(true, 255);
+          motorL_drive(false, 255);
+
           break;
         case 'R':  // право 100
+          motorR_drive(false, 255);
+          motorL_drive(true, 255);
           break;
         case 'K':  // читаем поворот
           isReadNumber = true;
           break;
         default:
+          break;
       }
     }
-
-    // if(incomingChar == 'e'){
-    //    digitalWrite(13, 1);
-    // }
-    // if(incomingChar == 'd'){
-    //    digitalWrite(13, 0);
-    // }
   }
 }
 
