@@ -16,9 +16,23 @@
 #include <SoftwareSerial.h>
 #define BT_TX 8
 #define BT_RX 7
-SoftwareSerial BTserial(BT_TX, BT_RX);  // TX, RX
-// принятые данные
-//boolean doneParsing, startParsing;
+SoftwareSerial BTserial(BT_TX, BT_RX);  // TX, RX 
+
+// установленный режим автономии 
+//  0 - ручной
+//  1 - печной, всмысле квадрат
+//  2 - круг 
+int rideMode = 0;
+// текущая задержка для таймера автономии
+unsigned long  currentAutoDelay = 0;
+// время начала работы автономии для таймера автономии
+unsigned long  currentAutoTime = 0;
+// текущая команда для автономии
+int currentAutoComandPos = 0;
+// максимальное количество автономных команд
+#define MAX_COMANDS_COUNT 10
+// скорость моторов в автономе
+#define AUTONOME_MOTOR_SPEED 255
 
 
 void setup() {
@@ -29,43 +43,100 @@ void setup() {
   // инициализация моторов
   motors_init();
 
-
   Serial.begin(9600);
   pinMode(13, 1);
+
 }
 
 
 
-int dataX, dataY;
-
 void loop() {
-  parsing();  // функция парсинга
+
+
+  // режим автономии 
+  if(rideMode != 0){
+
+    // пора тихоходке выполнить новую команду
+    if (millis() - currentAutoTime >= currentAutoDelay) {
+
+      // режим автономии 1
+      if(rideMode == 1){
+
+
+        // движения по квадрату
+        switch(currentAutoComandPos){
+          case 0:
+            // настраиваем время выполнения команды
+            currentAutoDelay = 2000;
+            // включаем моторы
+            motorR_drive(true, AUTONOME_MOTOR_SPEED);
+            motorL_drive(true, AUTONOME_MOTOR_SPEED);
+            break;
+
+          case 1:
+            // настраиваем время выполнения команды
+            currentAutoDelay = 450;
+            // включаем моторы
+            motorR_drive(false, AUTONOME_MOTOR_SPEED);
+            motorL_drive(true, AUTONOME_MOTOR_SPEED);
+            break;
+
+          case 2:
+            // остановим моторы
+            motors_stop();
+            // задержка до следующего повтора 
+            currentAutoDelay = 1000;
+            break;
+            
+          case 3:
+            // конец последовательности (эта строка должна быть в последнем кейсе)
+            currentAutoDelay = 0;
+        }
 
 
 
-
-  // if (doneParsing) {  // если получены данные
-  //   doneParsing = false;
-
-  //   int joystickX = map((dataX), -JOY_MAX, JOY_MAX, -MOTOR_MAX / 2, MOTOR_MAX / 2);  // сигнал по Х (-128 <> 127)
-  //   int joystickY = map((dataY), -JOY_MAX, JOY_MAX, -MOTOR_MAX, MOTOR_MAX);          // сигнал по Y (-256 <> 255)
-
-  //   int dutyR = joystickY + joystickX;  // считаем сигнал для правого мотора
-  //   int dutyL = joystickY - joystickX;  // считаем сигнал для левого мотора
+      }else if(rideMode == 2){// режим автономии 2
 
 
-  //   if (dutyR >= 0) {
-  //     motorR_drive(true, (uint8_t)dutyR);
-  //   } else {
-  //     motorR_drive(false, (uint8_t)(-dutyR));
-  //   }
 
-  //   if (dutyL >= 0) {
-  //     motorL_drive(true, (uint8_t)dutyL);
-  //   } else {
-  //     motorL_drive(false, (uint8_t)(-dutyL));
-  //   }
-  // }
+        // режим движения по кругу
+        switch(currentAutoComandPos){
+          case 0:
+            // настраиваем время выполнения команды
+            currentAutoDelay = 450;
+            // включаем моторы
+            motorR_drive(true, AUTONOME_MOTOR_SPEED-30);
+            motorL_drive(true, AUTONOME_MOTOR_SPEED);
+            break;
+
+          case 1:
+            // конец последовательности (эта строка должна быть в последнем кейсе)
+            currentAutoDelay = 0;
+        }
+
+
+
+      }
+
+
+      // Если последовательность закончилась
+      if(currentAutoComandPos >= MAX_COMANDS_COUNT){
+          // к первой команде
+          currentAutoComandPos = 0;
+
+      }else{
+        // следующая команда
+        currentAutoComandPos++;
+      }
+      
+      // стартуем таймер ожидания
+      currentAutoTime = millis();
+    }
+  }
+
+  // функция парсинга команд с bluetooth
+  parsing();  
+
 }
 
 
@@ -73,18 +144,23 @@ void loop() {
 bool isReadNumber = false;
 uint8_t tempNumber = 0;
 
-int lmot;
-int rmot;
+// текущая скорость моторов настроенная с помощью ползунка
+int lmot = 255;
+int rmot = 255;
+
 
 void parsing() {
   if (BTserial.available() > 0) {         // если в буфере есть данные
     char incomingChar = BTserial.read();  // читаем из буфера
 
+    // отладочный вывод
     Serial.println(incomingChar);
 
+    // ============== реагирование на перемещение ползунка ==============
 
-
+    // если сейчас читаем число и на входе цифра (чтение ползунка)
     if (isReadNumber && (incomingChar) <= '9' && (incomingChar) >= '0') {  // '0' == 48
+      // прибавляем ее к уже считанному числу
       tempNumber = tempNumber * 10 + (incomingChar - '0');
     } else {
 
@@ -107,52 +183,89 @@ void parsing() {
       }
 
 
-      switch (incomingChar) {
-        case 'S':  // стоп
+
+      // ============== реагирование на нажатие кнопок ==============
+
+      // если режим автономии выключен
+      if(rideMode == 0){
+
+        switch (incomingChar) {
+          case 'S':  // стоп
+            motors_stop();
+
+            break;
+          case 'F':  // вперед
+
+            if (lmot < 0) {
+              motorL_drive(false, (uint8_t)(-lmot));
+            } else {
+              motorL_drive(true, (uint8_t)(lmot));
+            }
+            if (rmot < 0) {
+              motorR_drive(false, (uint8_t)(-rmot));
+            } else {
+              motorR_drive(true, (uint8_t)(rmot));
+            }
+            break;
+          case 'G':  // назад
+            if (lmot < 0) {
+              motorL_drive(true, (uint8_t)(-lmot));
+            } else {
+              motorL_drive(false, (uint8_t)(lmot));
+            }
+            if (rmot < 0) {
+              motorR_drive(true, (uint8_t)(-rmot));
+            } else {
+              motorR_drive(false, (uint8_t)(rmot));
+            }
+
+            break;
+          case 'L':  // лево 100
+            motorR_drive(true, 255);
+            motorL_drive(false, 255);
+
+            break;
+          case 'R':  // право 100
+            motorR_drive(false, 255);
+            motorL_drive(true, 255);
+            break;
+          case 'K':  // читаем поворот
+            isReadNumber = true;
+            break;
+          case 'X':  // включаем режим автономии 1
+            rideMode = 1;
+            motors_stop();
+            currentAutoComandPos = 0;
+            currentAutoDelay = 0;
+            break;
+          case 'Y':  // включаем режим автономии 2
+            rideMode = 2;
+            motors_stop();
+            currentAutoComandPos = 0;
+            currentAutoDelay = 0;
+            break;
+          default:
+            break;
+        }
+
+      }else if(rideMode == 1){// если включен режим автономии 1
+        // реагируем только на одну кнопку
+        if(incomingChar == 'X'){
+          // отключение режима автономии
+          rideMode = 0;
           motors_stop();
-
-          break;
-        case 'F':  // вперед
-
-          if (lmot < 0) {
-            motorL_drive(false, (uint8_t)(-lmot));
-          } else {
-            motorL_drive(true, (uint8_t)(lmot));
-          }
-          if (rmot < 0) {
-            motorR_drive(false, (uint8_t)(-rmot));
-          } else {
-            motorR_drive(true, (uint8_t)(rmot));
-          }
-          break;
-        case 'G':  // назад
-          if (lmot < 0) {
-            motorL_drive(true, (uint8_t)(-lmot));
-          } else {
-            motorL_drive(false, (uint8_t)(lmot));
-          }
-          if (rmot < 0) {
-            motorR_drive(true, (uint8_t)(-rmot));
-          } else {
-            motorR_drive(false, (uint8_t)(rmot));
-          }
-
-          break;
-        case 'L':  // лево 100
-          motorR_drive(true, 255);
-          motorL_drive(false, 255);
-
-          break;
-        case 'R':  // право 100
-          motorR_drive(false, 255);
-          motorL_drive(true, 255);
-          break;
-        case 'K':  // читаем поворот
-          isReadNumber = true;
-          break;
-        default:
-          break;
+        }
+      }else if(rideMode == 2){// если включен режим автономии 2
+        // реагируем только на одну кнопку
+        if(incomingChar == 'Y'){
+          // отключение режима автономии
+          rideMode = 0;
+            motors_stop();
+        }
+          
       }
+
+
     }
   }
 }
