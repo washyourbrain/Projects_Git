@@ -19,6 +19,11 @@
  
 ---- temp 
  r   A0
+
+---- hotend
+ 44
+ 45
+ 46
  
 ---- display
  vdd 5V
@@ -32,19 +37,47 @@
  en   7
  */
 
+// ---------------- подключение портов ---------------------
+
+// датчик обрыва
+#define ROLLOUT_PIN 9
+
+// энкодер
+#define CLK 22 // желт
+#define DT 24  // оранж
+#define ENC_SW 26  // красн
+
+// шаговые двигатели
+#define STP_PIN_EN 8 // 8 пин шилда
+// x stepper
+#define STP1_PIN_ST 2  // (2 пин шилда)
+#define STP1_PIN_DIR 5 // (5 пин шилда)
+
+// транзисторы нагрева
+#define HOT_PIN_0 44
+#define HOT_PIN_1 45
+#define HOT_PIN_2 46
+
+// датчики нагрева
+#define THERMISTOR_PIN A8
+
+
+
+
+
 // ---------------- Основные параметры плавильни ---------------- 
 
 // Настроенная температура  от TEMP_MIN, до TEMP_MAX  
-#define TEMP_MIN 80
+#define TEMP_MIN 20
 #define TEMP_MAX 500
-static uint16_t enteredTemp = 200;
+static uint16_t enteredTemp = 190;
 
 // диапазон допустимых колебаний температуры при плавке
 // например 4 - это +-4 градуса
-#define TEMP_VARIATE 4
+#define TEMP_VARIATE 2
 
 // Температура с датчика
-static uint16_t sensorTemp = 222;
+float sensorTemp = 0;
 
 // Текущая скорость мотора
 #define SPEED_COEF 1 // коэффициэнт пресчета (столько мм в минуту дает однаединица скорости)
@@ -57,66 +90,41 @@ static uint8_t settingMode = 0;
 
 
 // ---------------- Подключенный обвес ---------------- 
-// транзистор нагрева
-#define HOT_PIN 11
-
-// датчик обрыва
-#define ROLLOUT_PIN 9
-
 
 // -- Подключение энкодера --
-#define CLK 22 // желт
-#define DT 24  // оранж
-#define ENC_SW 26  // красн
 Encoder enc1(CLK, DT, ENC_SW);
-
-
 // -- Подключение шаговика --
-#define STP_PIN_EN 8 // 8 пин шилда
-// x stepper
-#define STP1_PIN_ST 2  // (2 пин шилда)
-#define STP1_PIN_DIR 5 // (5 пин шилда)
 GStepper2<STEPPER2WIRE> stepper(2048, STP1_PIN_ST, STP1_PIN_DIR, STP_PIN_EN);// step, dir, en
-
-
-// -- Параметры дисплея --
-// переменная дисплей
+// -- Подключение дисплея --
 GyverOLED<SSH1106_128x64> oled;
 
 
 
 // -- Термистор --
-// int R1 = 10000;
-// float logR2, R2;
-// //steinhart-hart coeficients for thermistor
-// float c1 = 0.8438162826e-03, c2 = 2.059601750e-04, c3 = 0.8615484887e-07;
-
-// uint16_t Thermistor(float Volts) {
-//   R2 = R1 * (1023.0 / (float)Volts - 1.0); //calculate resistance on thermistor
-
-//   logR2 = log(R2);
-//   float T = (1.0 / (c1 + c2 * logR2 + c3 * logR2 * logR2 * logR2)); // temperature in Kelvin  
-//   return (uint16_t) T - 273; //convert Kelvin to Celcius
-// }
-
 #define THERMISTOR_B 3950 // B-коэффициент
-#define THERMISTOR_SERIAL_R 100000 // сопротивление последовательного резистора, 102 кОм
-#define THERMISTOR_R 100000 // номинальное сопротивления термистора, 100 кОм
-#define THERMISTOR_NOMINAL_T 25 // номинальная температура (при которой TR = 100 кОм)
-#define THERMISTOR_PIN A8
+#define THERMISTOR_SERIAL_R 50000 // сопротивление последовательного резистора, 102 кОм
+#define THERMISTOR_R 50000 // номинальное сопротивления термистора, 100 кОм
+#define THERMISTOR_NOMINAL_T 30 // номинальная температура (при которой TR = 100 кОм) 25
 
 
 float resistanseCurrent;
 float steinhart;
 float getTemp() {
-    //int t = analogRead( THERMISTOR_PIN );
-    resistanseCurrent = 1023.0 / analogRead( THERMISTOR_PIN ) - 1;
+    //int t = analogRead( THERMISTOR_PIN );   expRunningAverage
+    resistanseCurrent = 1023.0 / (analogRead( THERMISTOR_PIN )) - 1;
     resistanseCurrent = THERMISTOR_SERIAL_R / resistanseCurrent;
 
     steinhart = log(resistanseCurrent / THERMISTOR_R) / THERMISTOR_B; // 1/B * log(R/Ro)
     steinhart += 1.0 / (THERMISTOR_NOMINAL_T + 273.15); // + (1/To)
     steinhart = 1.0 / steinhart; // Invert
     steinhart -= 273.15; 
+
+
+    // Serial.print("50 ");
+    // Serial.print(analogRead(THERMISTOR_PIN));
+    // Serial.print(" ");
+    // Serial.println(steinhart);
+
     return steinhart;
 }
 
@@ -174,11 +182,47 @@ void timerIsr() {  // прерывание таймера
 }
 
 
+
+// ---------------- Дополнительные функции -----------------
+
+// пид регулятор
+float integral = 0, prevErr = 0;
+#define PID_P 5 // P-коэффициент
+#define PID_I 3 // I-коэффициент
+#define PID_D 10 // D-коэффициент
+#define PID_DT_DELAY 100 // Время в милисекундах
+#define PID_DT 0.1f // Время в секундах
+
+// (вход, установка, п, и, д, период в секундах, мин.выход, макс. выход)
+int computePID(float input, float setpoint, float kp, float ki, float kd, float dt, int minOut, int maxOut) {
+  float err = setpoint - input;
+  integral = constrain(integral + (float) err * dt * ki, minOut, maxOut);
+  float D = (err - prevErr) / dt;
+  prevErr = err;
+  return constrain(err * kp + integral + D * kd, minOut, maxOut);
+}
+
+
+// фильтр значений датчика температуры
+float k = 0.3;  // коэффициент фильтрации, 0.0-1.0
+float filVal = 0;
+// бегущее среднее
+float expRunningAverage(float newVal) {
+  filVal += (newVal - filVal) * k;
+  return filVal;
+}
+
 // ---------------- Основная программа ---------------- 
+
+
 void setup() {
   // инициализация транзистора нагрева
-  pinMode(HOT_PIN, OUTPUT);
-  digitalWrite(HOT_PIN, 0);
+  pinMode(HOT_PIN_0, OUTPUT);
+  pinMode(HOT_PIN_1, OUTPUT);
+  pinMode(HOT_PIN_2, OUTPUT);
+  digitalWrite(HOT_PIN_0, 0);
+  digitalWrite(HOT_PIN_1, 0);
+  digitalWrite(HOT_PIN_2, 0);
 
   // инициализация датчика обрыва
   pinMode(ROLLOUT_PIN, INPUT);
@@ -218,8 +262,11 @@ void setup() {
   stepper.setAcceleration(200); // ускорение
   stepper.reverse(true);
   
+  // инициализация фильтра температуры
+  filVal = analogRead( THERMISTOR_PIN );
+  sensorTemp = getTemp();
 
-  //Serial.begin(9600);
+  Serial.begin(9600);
 }
 
 
@@ -227,6 +274,8 @@ void setup() {
 
 // Таймер вывода инфы на дисплей
 static uint32_t dspTmr;
+// Таймер вызова PID функции
+static uint32_t pidTmr;
 void loop() {
 
 
@@ -238,30 +287,55 @@ void loop() {
   stepper.setSpeed(enteredMotorSpeed);  
 
   // Проверка датчика обрыва
-  if(digitalRead(ROLLOUT_PIN)){
-    // обрыв
-    digitalWrite(HOT_PIN, 0);// выкл
+  if(digitalRead(ROLLOUT_PIN)){// обрыв
     // выкл двигло
     stepper.disable();
   }else{
     // включаем двигатель
     stepper.enable();
     
-    // поддержание температуры
-    if(sensorTemp < enteredTemp - TEMP_VARIATE){
-      digitalWrite(HOT_PIN, 1); // включить
-    }
-    if(sensorTemp > enteredTemp + TEMP_VARIATE){
-      digitalWrite(HOT_PIN, 0); // выкл
-    }
   }
+
+  // раз в установленый период DT просчитываем пид регулятор (вторая проверка для переполнения таймера)
+  if(millis() - pidTmr > PID_DT_DELAY || millis() < pidTmr){
+    pidTmr = millis();
+
+    
+    // Опрос датчика температуры
+    sensorTemp = getTemp();//expRunningAverage(getTemp());
+    
+    // (вход, установка, п, и, д, период в секундах, мин.выход, макс. выход)
+    int output = computePID(sensorTemp, enteredTemp, PID_P, PID_I, PID_D, PID_DT, 0, 255);
+    analogWrite(HOT_PIN_0, output);
+
+    // для настройки PID
+    //Serial.print("in=");
+    Serial.print(enteredTemp);
+    //Serial.print("out=");
+    Serial.print(" ");
+    Serial.print(sensorTemp);
+    Serial.print(" ");
+    Serial.println(output);
+
+  }
+
+
+  // Serial.print("50 ");
+  // Serial.println(expRunningAverage(getTemp()));
+
+  
+  // // поддержание температуры
+  // if(sensorTemp < enteredTemp - TEMP_VARIATE){
+  //   digitalWrite(HOT_PIN_0, 1); // включить
+  // }
+  // if(sensorTemp > enteredTemp + TEMP_VARIATE){
+  //   digitalWrite(HOT_PIN_0, 0); // выкл
+  // }
   
 
   // раз в 30 милисекунд обновляем дисплей (вторая проверка для переполнения таймера)
   if(millis() - dspTmr > 300 || millis() < dspTmr){
-
-    // Опрос датчика температуры
-    sensorTemp = getTemp();
+    dspTmr = millis();
 
 
     // -- вывод данных на дисплей --
