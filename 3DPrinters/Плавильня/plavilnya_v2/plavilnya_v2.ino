@@ -70,7 +70,7 @@
 // Настроенная температура  от TEMP_MIN, до TEMP_MAX  
 #define TEMP_MIN 20
 #define TEMP_MAX 500
-static uint16_t enteredTemp = 190;
+static uint16_t enteredTemp = 150;
 
 // диапазон допустимых колебаний температуры при плавке
 // например 4 - это +-4 градуса
@@ -101,10 +101,10 @@ GyverOLED<SSH1106_128x64> oled;
 
 
 // -- Термистор --
-#define THERMISTOR_B 3950 // B-коэффициент
-#define THERMISTOR_SERIAL_R 50000 // сопротивление последовательного резистора, 102 кОм
-#define THERMISTOR_R 50000 // номинальное сопротивления термистора, 100 кОм
-#define THERMISTOR_NOMINAL_T 30 // номинальная температура (при которой TR = 100 кОм) 25
+#define THERMISTOR_B 4514 // B-коэффициент 3950
+#define THERMISTOR_SERIAL_R 4840 // сопротивление последовательного резистора, 102 кОм    5K1
+#define THERMISTOR_R 120400 // номинальное сопротивления термистора, 100 кОм
+#define THERMISTOR_NOMINAL_T 21 // номинальная температура (при которой TR = 100 кОм) 25
 
 
 float resistanseCurrent;
@@ -119,6 +119,10 @@ float getTemp() {
     steinhart = 1.0 / steinhart; // Invert
     steinhart -= 273.15; 
 
+    // Serial.print(analogRead( THERMISTOR_PIN ));
+    // Serial.print(" ");
+    // Serial.print( steinhart );
+    // Serial.print(" ");
 
     // Serial.print("50 ");
     // Serial.print(analogRead(THERMISTOR_PIN));
@@ -187,9 +191,9 @@ void timerIsr() {  // прерывание таймера
 
 // пид регулятор
 float integral = 0, prevErr = 0;
-#define PID_P 5 // P-коэффициент
-#define PID_I 3 // I-коэффициент
-#define PID_D 10 // D-коэффициент
+#define PID_P 6.5 // P-коэффициент 65
+#define PID_I 1.0 // I-коэффициент 1
+#define PID_D 3.1 // D-коэффициент
 #define PID_DT_DELAY 100 // Время в милисекундах
 #define PID_DT 0.1f // Время в секундах
 
